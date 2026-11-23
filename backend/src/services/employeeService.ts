@@ -1,12 +1,12 @@
-import { average, median, paginationMeta, toUsd } from "../utils/analytics";
-import { badRequest, notFound } from "../utils/errors";
-import type { EmployeeRepository, SalaryPoint } from "../repositories/employeeRepository";
-import type { CreateEmployeeInput, ListQuery, UpdateSalaryInput } from "../validation/employee";
+import { average, median, paginationMeta, toUsd } from "../utils/analytics.js";
+import { badRequest, notFound } from "../utils/errors.js";
+import type { EmployeeRepository, EmployeeRow, SalaryPoint } from "../repositories/employeeRepository.js";
+import type { CreateEmployeeInput, ListQuery, UpdateSalaryInput } from "../validation/employee.js";
 
 export class EmployeeService {
   constructor(private repo: EmployeeRepository) {}
   list(q: ListQuery) {
-    return this.repo.list(q, q).then(({ items, total }) => ({ data: items, meta: paginationMeta(total, q.page, q.pageSize) }));
+    return this.repo.list(q, q).then(({ items, total }: { items: EmployeeRow[]; total: number }) => ({ data: items, meta: paginationMeta(total, q.page, q.pageSize) }));
   }
   async getById(id: string) {
     const e = await this.repo.getById(id);

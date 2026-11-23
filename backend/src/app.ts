@@ -1,16 +1,16 @@
 import cors from "cors";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
-import { analyticsController, employeeController } from "./controllers/employeeController";
-import { PrismaEmployeeRepository, type EmployeeRepository } from "./repositories/employeeRepository";
-import { AnalyticsService, EmployeeService } from "./services/employeeService";
-import { ApiError } from "./utils/errors";
-import { prisma } from "./db";
+import { analyticsController, employeeController } from "./controllers/employeeController.js";
+import { PgEmployeeRepository, type EmployeeRepository } from "./repositories/employeeRepository.js";
+import { AnalyticsService, EmployeeService } from "./services/employeeService.js";
+import { ApiError } from "./utils/errors.js";
+import { pool } from "./db.js";
 
 function asyncHandler(fn: (req: Request, res: Response) => Promise<void>) {
   return (req: Request, res: Response, next: NextFunction) => { fn(req, res).catch(next); };
 }
 
-export function createApp(repo: EmployeeRepository = new PrismaEmployeeRepository(prisma)): Express {
+export function createApp(repo: EmployeeRepository = new PgEmployeeRepository(pool)): Express {
   const app = express();
   app.use(cors({ origin: process.env.FRONTEND_URL ?? "http://localhost:5173" }));
   app.use(express.json());
@@ -29,7 +29,7 @@ export function createApp(repo: EmployeeRepository = new PrismaEmployeeRepositor
 
   app.use((_req, res) => res.status(404).json({ error: { code: "NOT_FOUND", message: "Route not found" } }));
   // Single error envelope for every failure.
-  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     if (err instanceof ApiError) return res.status(err.status).json({ error: { code: "API_ERROR", message: err.message, details: err.details } });
     console.error(err);
     return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "Internal server error" } });

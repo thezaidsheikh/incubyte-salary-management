@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
-import { createEmployeeSchema, listQuerySchema, updateSalarySchema } from "../validation/employee";
-import { ApiError } from "../utils/errors";
-import type { AnalyticsService, EmployeeService } from "../services/employeeService";
+import { createEmployeeSchema, listQuerySchema, updateSalarySchema } from "../validation/employee.js";
+import { ApiError } from "../utils/errors.js";
+import type { AnalyticsService, EmployeeService } from "../services/employeeService.js";
 
 function parseBody<T>(schema: { parse: (v: unknown) => T }, body: unknown): T {
   try { return schema.parse(body); }
@@ -31,7 +31,7 @@ export function employeeController(service: EmployeeService) {
     },
     exportCsv: async (req: Request, res: Response) => {
       // Stream CSV in pages so a filtered 10k export never sits fully in RAM.
-      const q = parseBody(listQuerySchema, { ...req.query, page: 1, pageSize: 100 });
+      const q = parseBody(listQuerySchema, { ...(req.query as Record<string, unknown>), page: 1, pageSize: 100 });
       res.setHeader("Content-Type", "text/csv");
       res.setHeader("Content-Disposition", 'attachment; filename="employees.csv"');
       res.write("id,firstName,lastName,email,department,country,currency,jobTitle,level,baseSalary,dateOfJoining\n");

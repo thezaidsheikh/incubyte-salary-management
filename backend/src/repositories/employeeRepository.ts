@@ -1,5 +1,5 @@
-import { PrismaClient } from "@prisma/client";
-import type { ListQuery } from "../validation/employee";
+import type { Pool, PoolClient } from "pg";
+import type { ListQuery } from "../validation/employee.js";
 
 export interface EmployeeRow {
   id: string; firstName: string; lastName: string; email: string;
@@ -23,54 +23,93 @@ export interface EmployeeRepository {
   allForExport(filters: EmployeeFilters): Promise<EmployeeRow[]>;
 }
 
-/** Prisma implementation — the only class that knows about the DB. */
-export class PrismaEmployeeRepository implements EmployeeRepository {
-  constructor(private prisma: PrismaClient) {}
-  private where(f: EmployeeFilters) {
-    return {
-      ...(f.department ? { department: f.department } : {}),
-      ...(f.country ? { country: f.country } : {}),
-      ...(f.level ? { level: f.level as never } : {}),
-      ...(f.search ? { OR: [
-        { firstName: { contains: f.search, mode: "insensitive" as const } },
-        { lastName: { contains: f.search, mode: "insensitive" as const } },
-        { email: { contains: f.search, mode: "insensitive" as const } },
-      ] } : {}),
-    };
+function mapEmployee(r: Record<string, unknown>): EmployeeRow {
+  return {
+    id: r.id as string, firstName: r.first_name as string, lastName: r.last_name as string,
+    email: r.email as string, department: r.department as string, country: r.country as string,
+    currency: r.currency as string, jobTitle: r.job_title as string, level: r.level as string,
+    managerId: (r.manager_id as string | null) ?? null,
+    dateOfJoining: new Date(r.date_of_joining as string),
+    employmentStatus: r.employment_status as string, baseSalary: Number(r.base_salary),
+    createdAt: new Date(r.created_at as string), updatedAt: new Date(r.updated_at as string),
+  };
+}
+function mapHistory(r: Record<string, unknown>): SalaryHistoryRow {
+  return {
+    id: r.id as string, employeeId: r.employee_id as string, oldSalary: Number(r.old_salary),
+    newSalary: Number(r.new_salary), currency: r.currency as string, reason: r.reason as string,
+    changedBy: r.changed_by as string, changedAt: new Date(r.changed_at as string),
+  };
+}
+const COLS = "id, first_name, last_name, email, department, country, currency, job_title, level, manager_id, date_of_joining, employment_status, base_salary, created_at, updated_at";
+const SORTABLE: Record<string, string> = { baseSalary: "base_salary", lastName: "last_name", dateOfJoining: "date_of_joining" };
+
+/** pg implementation — the only class that knows SQL. */
+export class PgEmployeeRepository implements EmployeeRepository {
+  constructor(private pool: Pool) {}
+  private where(f: EmployeeFilters, params: unknown[]): string {
+    const clauses: string[] = [];
+    if (f.department) { params.push(f.department); clauses.push(`department = $${params.length}`); }
+    if (f.country) { params.push(f.country); clauses.push(`country = $${params.length}`); }
+    if (f.level) { params.push(f.level); clauses.push(`level = $${params.length}`); }
+    if (f.search) { params.push(`%${f.search}%`); clauses.push(`(first_name ILIKE $${params.length} OR last_name ILIKE $${params.length} OR email ILIKE $${params.length})`); }
+    return clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   }
   async list(f: EmployeeFilters, q: ListQuery) {
-    const where = this.where(f);
-    const [items, total] = await Promise.all([
-      this.prisma.employee.findMany({ where, orderBy: { [q.sortBy]: q.sortOrder }, skip: (q.page - 1) * q.pageSize, take: q.pageSize }),
-      this.prisma.employee.count({ where }),
-    ]);
-    return { items: items as EmployeeRow[], total };
+    const params: unknown[] = [];
+    const where = this.where(f, params);
+    const sortCol = SORTABLE[q.sortBy] ?? "last_name";
+    const sortDir = q.sortOrder === "desc" ? "DESC" : "ASC";
+    const offset = (q.page - 1) * q.pageSize;
+    const rows = await this.pool.query(
+      `SELECT ${COLS} FROM employees ${where} ORDER BY ${sortCol} ${sortDir} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, q.pageSize, offset]);
+    const total = await this.pool.query(`SELECT COUNT(*)::int AS c FROM employees ${where}`, params);
+    return { items: rows.rows.map(mapEmployee), total: total.rows[0].c as number };
   }
   async getById(id: string) {
-    const e = await this.prisma.employee.findUnique({ where: { id }, include: { salaryHistory: { orderBy: { changedAt: "desc" } } } });
-    return e as (EmployeeRow & { salaryHistory: SalaryHistoryRow[] }) | null;
+    const e = await this.pool.query(`SELECT ${COLS} FROM employees WHERE id = $1`, [id]);
+    if (e.rows.length === 0) return null;
+    const h = await this.pool.query(
+      "SELECT id, employee_id, old_salary, new_salary, currency, reason, changed_by, changed_at FROM salary_history WHERE employee_id = $1 ORDER BY changed_at DESC", [id]);
+    return { ...mapEmployee(e.rows[0]), salaryHistory: h.rows.map(mapHistory) };
   }
   async create(data: Omit<EmployeeRow, "id" | "createdAt" | "updatedAt" | "employmentStatus">) {
-    const e = await this.prisma.employee.create({ data: { ...data, dateOfJoining: new Date(data.dateOfJoining) } });
-    return e as EmployeeRow;
+    const { randomUUID } = await import("node:crypto");
+    const r = await this.pool.query(
+      `INSERT INTO employees (id, first_name, last_name, email, department, country, currency, job_title, level, manager_id, date_of_joining, base_salary)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING ${COLS}`,
+      [randomUUID(), data.firstName, data.lastName, data.email, data.department, data.country, data.currency, data.jobTitle, data.level, data.managerId, data.dateOfJoining, data.baseSalary]);
+    return mapEmployee(r.rows[0]);
   }
   async updateSalary(id: string, newSalary: number, reason: string, changedBy: string) {
-    // Transaction: salary update + audit row succeed or fail together.
-    return this.prisma.$transaction(async (tx) => {
-      const emp = await tx.employee.findUnique({ where: { id } });
-      if (!emp) return null;
-      const employee = await tx.employee.update({ where: { id }, data: { baseSalary: newSalary } });
-      const history = await tx.salaryHistory.create({ data: { employeeId: id, oldSalary: emp.baseSalary, newSalary, currency: emp.currency, reason, changedBy } });
-      return { employee: employee as EmployeeRow, history: history as SalaryHistoryRow };
-    });
+    const client: PoolClient = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const emp = await client.query(`SELECT ${COLS} FROM employees WHERE id = $1 FOR UPDATE`, [id]);
+      if (emp.rows.length === 0) { await client.query("ROLLBACK"); return null; }
+      const current = mapEmployee(emp.rows[0]);
+      const { randomUUID } = await import("node:crypto");
+      const updated = await client.query(
+        `UPDATE employees SET base_salary = $1, updated_at = now() WHERE id = $2 RETURNING ${COLS}`, [newSalary, id]);
+      const hist = await client.query(
+        `INSERT INTO salary_history (id, employee_id, old_salary, new_salary, currency, reason, changed_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, employee_id, old_salary, new_salary, currency, reason, changed_by, changed_at`,
+        [randomUUID(), id, current.baseSalary, newSalary, current.currency, reason, changedBy]);
+      await client.query("COMMIT");
+      return { employee: mapEmployee(updated.rows[0]), history: mapHistory(hist.rows[0]) };
+    } catch (e) { await client.query("ROLLBACK").catch(() => undefined); throw e; }
+    finally { client.release(); }
   }
   async salaryPoints() {
-    const rows = await this.prisma.employee.findMany({ select: { department: true, country: true, level: true, baseSalary: true, currency: true } });
-    return rows;
+    const r = await this.pool.query("SELECT department, country, level, base_salary, currency FROM employees");
+    return r.rows.map((x) => ({ department: x.department as string, country: x.country as string, level: x.level as string, baseSalary: Number(x.base_salary), currency: x.currency as string }));
   }
   async allForExport(f: EmployeeFilters) {
-    const items = await this.prisma.employee.findMany({ where: this.where(f), orderBy: { lastName: "asc" } });
-    return items as EmployeeRow[];
+    const params: unknown[] = [];
+    const where = this.where(f, params);
+    const r = await this.pool.query(`SELECT ${COLS} FROM employees ${where} ORDER BY last_name ASC`, params);
+    return r.rows.map(mapEmployee);
   }
 }
 

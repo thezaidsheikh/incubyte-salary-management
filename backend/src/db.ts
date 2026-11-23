@@ -1,2 +1,3 @@
-import { PrismaClient } from "@prisma/client";
-export const prisma = new PrismaClient();
+import { Pool } from "pg";
+export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+pool.on("error", (err) => console.error("Postgres pool error:", err.message));
