@@ -1,8 +1,8 @@
 import request from "supertest";
 import { describe, expect, it, beforeEach } from "vitest";
 import { createApp } from "../src/app";
-import { InMemoryEmployeeRepository } from "../src/repositories/employeeRepository";
-import { generateEmployees } from "../src/utils/seedData";
+import { InMemoryEmployeeRepository } from "../src/modules/employees/employee.repository";
+import { generateEmployees } from "../src/seed/seedData";
 
 function seededApp() {
   const repo = new InMemoryEmployeeRepository();

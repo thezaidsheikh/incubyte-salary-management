@@ -3,9 +3,9 @@
 // Usage: npx tsx scripts/verify-pgmem.ts
 import { readFileSync } from "node:fs";
 import { newDb } from "pg-mem";
-import { generateEmployees } from "../src/utils/seedData.js";
+import { generateEmployees } from "../src/seed/seedData.js";
 import { createApp } from "../src/app.js";
-import { PgEmployeeRepository } from "../src/repositories/employeeRepository.js";
+import { PgEmployeeRepository } from "../src/modules/employees/employee.repository.js";
 
 async function main() {
   const started = Date.now();

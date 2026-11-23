@@ -1,3 +1,5 @@
+// Thin bootstrap: build the app from the composition root and listen.
+// No logic lives here, so it is excluded from coverage (see vitest.config.ts).
 import "dotenv/config";
 import { createApp } from "./app.js";
 

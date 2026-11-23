@@ -1,38 +1,41 @@
 import cors from "cors";
-import express, { type Express, type NextFunction, type Request, type Response } from "express";
-import { analyticsController, employeeController } from "./controllers/employeeController.js";
-import { PgEmployeeRepository, type EmployeeRepository } from "./repositories/employeeRepository.js";
-import { AnalyticsService, EmployeeService } from "./services/employeeService.js";
-import { ApiError } from "./utils/errors.js";
-import { pool } from "./db.js";
+import express, { type Express } from "express";
+import { pool } from "./shared/db.js";
+import { errorHandler, notFoundHandler } from "./shared/http.js";
+import { createAnalyticsModule } from "./modules/analytics/index.js";
+import { createEmployeeModule, type EmployeeRepository } from "./modules/employees/index.js";
+import { createSalaryModule } from "./modules/salary/index.js";
 
-function asyncHandler(fn: (req: Request, res: Response) => Promise<void>) {
-  return (req: Request, res: Response, next: NextFunction) => { fn(req, res).catch(next); };
-}
+// Composition root ONLY: this file wires modules together and mounts
+// routes. It holds no business logic, no SQL and no validation — each
+// module factory builds its own repository -> service -> router chain
+// (Pattern: DI — a repository passed in here flows into every service).
 
-export function createApp(repo: EmployeeRepository = new PgEmployeeRepository(pool)): Express {
+/**
+ * Build the Express app.
+ * @param repo Optional repository to inject (tests pass InMemory here);
+ * when omitted, a PgEmployeeRepository over the default pool is used.
+ * @returns The configured Express app (not yet listening).
+ */
+export function createApp(repo?: EmployeeRepository): Express {
   const app = express();
-  app.use(cors({ origin: process.env.FRONTEND_URL ?? "http://localhost:5173" }));
+  // Next.js frontend origin; override with FRONTEND_URL in production.
+  app.use(cors({ origin: process.env.FRONTEND_URL ?? "http://localhost:3000" }));
   app.use(express.json());
-  const employees = new EmployeeService(repo);
-  const analytics = new AnalyticsService(repo);
-  const ec = employeeController(employees);
-  const ac = analyticsController(analytics);
 
+  const source = repo ?? pool;
+  const employees = createEmployeeModule(source);
+  const salary = createSalaryModule(source);
+  const analytics = createAnalyticsModule(source);
+
+  // Health check — no dependencies, always available.
   app.get("/api/health", (_req, res) => res.json({ data: { status: "ok" } }));
-  app.get("/api/employees/export", asyncHandler(ec.exportCsv));
-  app.get("/api/employees", asyncHandler(ec.list));
-  app.get("/api/employees/:id", asyncHandler(ec.getById));
-  app.post("/api/employees", asyncHandler(ec.create));
-  app.patch("/api/employees/:id/salary", asyncHandler(ec.updateSalary));
-  app.get("/api/analytics/summary", asyncHandler(ac.summary));
+  app.use("/api/employees", employees.router);
+  app.use("/api/employees", salary.router);
+  app.use("/api/analytics", analytics.router);
 
-  app.use((_req, res) => res.status(404).json({ error: { code: "NOT_FOUND", message: "Route not found" } }));
+  app.use(notFoundHandler);
   // Single error envelope for every failure.
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    if (err instanceof ApiError) return res.status(err.status).json({ error: { code: "API_ERROR", message: err.message, details: err.details } });
-    console.error(err);
-    return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "Internal server error" } });
-  });
+  app.use(errorHandler);
   return app;
 }
