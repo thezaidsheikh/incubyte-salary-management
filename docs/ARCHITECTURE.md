@@ -2,7 +2,7 @@
 
 ## Overview
 ```
-┌─────────────┐   HTTP/JSON    ┌──────────────────┐   Prisma    ┌──────────────┐
+┌─────────────┐   HTTP/JSON    ┌──────────────────┐   pg Pool   ┌──────────────┐
 │ React + Vite│ ─────────────► │ Express + TS     │ ──────────► │ PostgreSQL 16│
 │ (frontend/) │                │ (backend/src)    │             │ Employee +   │
 │ Dashboard / │                │ routes →         │             │ SalaryHistory│
@@ -17,7 +17,7 @@ Monorepo, two packages, one Postgres. No auth (out of scope, see REQUIREMENTS.md
 - `routes/` — thin HTTP wiring only: path, method, which controller.
 - `controllers/` — parse/validate input (Zod), call service, shape the response envelope.
 - `services/` — business rules: salary validation, history audit, analytics math (median, buckets, outliers), pagination math. No SQL here.
-- `repositories/` — the only place that talks to Prisma/DB: queries, indexes used, pagination.
+- `repositories/` — the only place that talks to pg/DB: SQL queries, indexes used, pagination.
 - `validation/` — Zod schemas, shared by controllers and tests.
 - `utils/` — error envelope, pagination helpers, median, seeded RNG.
 
@@ -27,7 +27,7 @@ Why layered: a rule (e.g. "every salary change writes history") lives in one pla
 HR searches "Priya" → frontend `GET /api/employees?search=Priya&page=1&pageSize=20` → route → controller validates query → service builds filters → repository runs one indexed `WHERE name/email ILIKE` query with `LIMIT/OFFSET` + a `COUNT` → controller returns `{ data, meta: { page, pageSize, total, totalPages } }` → table renders 20 rows, not 10,000.
 
 ## Data flow for a salary change
-`PATCH /api/employees/:id/salary` → validate `newSalary > 0`, `reason` non-empty → service loads employee → Prisma transaction: update `Employee.baseSalary` AND insert `SalaryHistory` (old, new, reason, changedBy="HR Manager") → return updated employee + history row. If either write fails, both roll back.
+`PATCH /api/employees/:id/salary` → validate `newSalary > 0`, `reason` non-empty → service loads employee → Postgres transaction: update `employees.base_salary` AND insert `SalaryHistory` (old, new, reason, changedBy="HR Manager") → return updated employee + history row. If either write fails, both roll back.
 
 ## Frontend (`frontend/src`)
 - `pages/` — Dashboard, Employees, EmployeeDetail, AddEmployee.

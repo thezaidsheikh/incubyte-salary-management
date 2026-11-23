@@ -2,7 +2,7 @@
 
 Web app for an HR Manager to manage salaries for 10,000 employees at ACME org (currently on Excels). See `docs/REQUIREMENTS.md` first — it was written before any code.
 
-**Stack:** Node.js 24 + TypeScript + Express + Prisma + PostgreSQL 16 (backend), React + Vite + TypeScript + Tailwind CSS (frontend). Tests: Vitest + Supertest.
+**Stack:** Node.js 24 + TypeScript + Express + `pg` + PostgreSQL 16 (backend), React + Vite + TypeScript + Tailwind CSS (frontend). Tests: Vitest + Supertest.
 
 ## Quick start
 ```bash
@@ -10,7 +10,7 @@ Web app for an HR Manager to manage salaries for 10,000 employees at ACME org (c
 docker compose up -d
 # 2. Backend
 cd backend && cp .env.example .env && npm install
-npx prisma migrate dev --name init   # or: npm run prisma:push
+npm run migrate   # psql $DATABASE_URL -f migrations/001_init.sql
 npm run seed                         # exactly 10,000 employees
 npm run dev                          # http://localhost:4000
 # 3. Frontend (new terminal)
