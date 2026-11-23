@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
-import { pool } from "../src/db.js";
-import { generateEmployees } from "../src/utils/seedData.js";
+import { pool } from "../src/shared/db.js";
+import { generateEmployees } from "../src/seed/seedData.js";
 
 const TOTAL = 10_000;
 
