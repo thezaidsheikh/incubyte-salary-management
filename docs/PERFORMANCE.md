@@ -15,14 +15,16 @@ Never move 10,000 rows to the browser or hold them all in server memory when a p
 ## What was deliberately not done
 - No Redis/cache layer: at 10k rows Postgres answers these queries directly; a cache would add a service and stale-data risk for no measurable gain.
 - No materialised views: same reason — revisit past ~100k employees.
-- No chart library: CSS bars keep the bundle at ~185 kB JS (59 kB gzip).
+- No chart library: CSS bars keep the Next.js First Load JS at 90–99 kB
+  per route (was ~185 kB JS / 59 kB gzip in the Vite build).
 
-## Measured (real PostgreSQL 16, this VM, 23 Nov 2026)
-- Seed: exactly 10,000 employees in 0.8–1.0 s (10 batches of 1,000).
-- `GET /api/health`: 200 in ~11 ms.
+## Measured (real PostgreSQL 16, this VM, 23 Nov 2026 — re-measured after the rework)
+- Seed: exactly 10,000 employees in 0.7–0.9 s (10 batches of 1,000).
+- `GET /api/health`: 200 in ~12 ms.
 - `GET /api/employees/export`: 10,001 lines (header + 10,000 rows) in ~0.26 s.
 - `GET /api/analytics/summary`: 10,000 employees, avg USD 4,555, median USD 3,587.
-- pg-mem verification (no server): same seed took 14 s — emulator overhead, not Postgres.
+- pg-mem verification (no server): same seed took 22 s — emulator overhead, not Postgres.
+- Next.js production build: 6 routes, First Load JS 90–99 kB per route.
 
 ## How to verify
 ```bash
