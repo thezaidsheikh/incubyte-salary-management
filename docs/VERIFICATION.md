@@ -19,7 +19,7 @@ Re-checked 23 Nov 2026 after the Next.js + modular-monolith rework.
 | 10 | Analytics: headcount, payroll, avg/median, by dept/country/level, distribution, top 10, outliers | ✅ | `GET /api/analytics/summary` (`modules/analytics/`); measured on 10,000 rows: avg USD 4,555, median USD 3,587, 10 depts, 8 countries |
 | 11 | CSV export respecting filters, streamed | ✅ | `GET /api/employees/export`; measured 10,001 lines (header + 10,000 rows), correct header |
 | 12 | Meaningful, fast, deterministic tests | ✅ | Backend 80 tests, frontend 62 tests; see `docs/TESTING.md` (99.73% / 100% lines) |
-| 13 | Incremental commits showing evolution | ✅ | 12 original commits + rework commits below (no squash) |
+| 13 | Incremental commits showing evolution | ✅ | 25 commits total — 12 original + 12 feature-level rework commits (the old 97-file rework commit was split, one feature per commit) + 1 docs commit (no squash) |
 | 14 | Artifacts committed | ✅ | `docs/REQUIREMENTS.md`, `ARCHITECTURE.md`, `TRADEOFFS.md`, `PERFORMANCE.md`, `AI-USAGE.md`, `DESIGN-PATTERNS.md`, `TESTING.md`, this file |
 | 15 | Deployed software + video demo | ⏳ Phase 2 | Not done yet — honestly marked, not claimed. Deployment notes in `docs/ARCHITECTURE.md`; `gh` is now authenticated as `thezaidsheikh`, so the push can happen with history intact |
 
