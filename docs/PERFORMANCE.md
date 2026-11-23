@@ -17,6 +17,13 @@ Never move 10,000 rows to the browser or hold them all in server memory when a p
 - No materialised views: same reason — revisit past ~100k employees.
 - No chart library: CSS bars keep the bundle at ~185 kB JS (59 kB gzip).
 
+## Measured (real PostgreSQL 16, this VM, 23 Nov 2026)
+- Seed: exactly 10,000 employees in 0.8–1.0 s (10 batches of 1,000).
+- `GET /api/health`: 200 in ~11 ms.
+- `GET /api/employees/export`: 10,001 lines (header + 10,000 rows) in ~0.26 s.
+- `GET /api/analytics/summary`: 10,000 employees, avg USD 4,555, median USD 3,587.
+- pg-mem verification (no server): same seed took 14 s — emulator overhead, not Postgres.
+
 ## How to verify
 ```bash
 # list timing (should be well under a second on local Postgres)
