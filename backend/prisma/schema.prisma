@@ -1,0 +1,66 @@
+// Salary Management — ACME org, 10,000 employees.
+// PostgreSQL is the production target. Current salary lives on Employee
+// for fast reads; SalaryHistory is the audit source of truth for changes.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Level {
+  Junior
+  Mid
+  Senior
+  Lead
+  Manager
+  Director
+}
+
+enum EmploymentStatus {
+  Active
+  OnLeave
+}
+
+model Employee {
+  id               String           @id @default(uuid())
+  firstName        String
+  lastName         String
+  email            String           @unique
+  department       String
+  country          String
+  currency         String
+  jobTitle         String
+  level            Level
+  managerId        String?
+  manager          Employee?        @relation("ManagerReports", fields: [managerId], references: [id], onDelete: SetNull)
+  reports          Employee[]       @relation("ManagerReports")
+  dateOfJoining    DateTime
+  employmentStatus EmploymentStatus @default(Active)
+  baseSalary       Int // monthly base salary, in `currency`
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  salaryHistory    SalaryHistory[]
+
+  @@index([department])
+  @@index([country])
+  @@index([level])
+  @@index([baseSalary])
+  @@index([lastName, firstName])
+}
+
+model SalaryHistory {
+  id         String   @id @default(uuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  oldSalary  Int
+  newSalary  Int
+  currency   String
+  reason     String
+  changedBy  String   @default("HR Manager")
+  changedAt  DateTime @default(now())
+
+  @@index([employeeId, changedAt])
+}
