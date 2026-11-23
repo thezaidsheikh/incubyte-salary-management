@@ -34,6 +34,11 @@ cd backend && npm test
 cd frontend && npm run build   # + npm test
 ```
 
+Live-SQL verification without a Postgres server (migration + 10,000 seed + HTTP smoke test against pg-mem):
+```bash
+cd backend && npx tsx scripts/verify-pgmem.ts
+```
+
 ## Docs for the reviewer
 - `docs/REQUIREMENTS.md` — one-page requirements (written first)
 - `docs/ARCHITECTURE.md` — layers, request flow, salary-change flow
